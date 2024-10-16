@@ -17,6 +17,7 @@ void flip_irq();
 void timer();
 void start_counting();
 void end_counting();
+void ticker_func();
 
 // Initialise the digital pin LED1 as an output
 #ifdef LED1
@@ -31,12 +32,15 @@ Timer t;
 // Handler timer
 int handlerTimer = 0;
 
+// Init Ticker
+Ticker ticker;
+
 int main()
 {
     //blinking_test();
     //button_test();
     //button_irq();
-    timer();
+    ticker_func();
     return 0;
 }
 
@@ -130,13 +134,14 @@ void timer() {
 void start_counting() {
     t.start();
     led = !led;
-    //printf("Start time: %f seconds\n", t.read());
 }
 
 void end_counting() {
     t.stop();
     led = !led;
     handlerTimer = 1;
-    //printf("End time: %f seconds\n", t.read());
+}
 
+void ticker_func() {
+    ticker.attach(&flip_irq, 1.0);
 }
