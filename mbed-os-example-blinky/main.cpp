@@ -12,11 +12,21 @@
 
 void blinking_test();
 void button_test();
+void button_irq();
+void flip_irq();
+
+// Initialise the digital pin LED1 as an output
+#ifdef LED1
+    DigitalOut led(LED1);
+#else
+    bool led;
+#endif
 
 int main()
 {
     //blinking_test();
-    button_test();
+    //button_test();
+    button_irq();
     return 0;
 }
 
@@ -54,7 +64,7 @@ void button_test() {
     #ifdef BUTTON1
         DigitalIn button(BUTTON1);
     #else
-        bool led;
+        bool button;
     #endif
 
     while (true) {
@@ -67,3 +77,23 @@ void button_test() {
         printf("button_state = %d \n\r", button.read());
     }
 }
+
+void button_irq() {
+
+    // Initialise the digital pin BUTTON1
+    #ifdef BUTTON1
+        InterruptIn button(BUTTON1);
+    #else
+        bool button;
+    #endif
+
+    button.rise(&flip_irq);  // attach the address of the flip function to the rising edge
+    while(1) {           // wait around, interrupts will interrupt this!
+        ThisThread::sleep_for(250ms);
+    }
+}
+
+void flip_irq() {
+    led = !led;
+}
+
