@@ -18,6 +18,9 @@ void timer();
 void start_counting();
 void end_counting();
 void ticker_func();
+void freq();
+void increment_freq_rate();
+
 
 // Initialise the digital pin LED1 as an output
 #ifdef LED1
@@ -40,7 +43,9 @@ int main()
     //blinking_test();
     //button_test();
     //button_irq();
-    ticker_func();
+    //timer();
+    //ticker_func();
+    freq();
     return 0;
 }
 
@@ -144,4 +149,29 @@ void end_counting() {
 
 void ticker_func() {
     ticker.attach(&flip_irq, 1.0);
+}
+
+void freq() {
+    // Initialise the digital pin BUTTON1
+    #ifdef BUTTON1
+        InterruptIn button(BUTTON1);
+    #else
+        bool button;
+    #endif
+
+    std::chrono::milliseconds freq_rate = 100ms;
+    ticker.attach(&flip_irq, freq_rate);
+    button.fall(&increment_freq_rate);  // attach the address of the flip function to the rising edge
+    while(1) {           // wait around, interrupts will interrupt this!
+        ThisThread::sleep_for(250ms);
+        if(handlerTimer == 1) {
+            freq_rate *= 10;
+            handlerTimer = 0;
+            ticker.attach(&flip_irq, freq_rate);
+        }
+    }
+}
+
+void increment_freq_rate() {
+    handlerTimer = 1;
 }
