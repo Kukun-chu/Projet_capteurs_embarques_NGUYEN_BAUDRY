@@ -88,6 +88,7 @@ void button_irq() {
     #endif
 
     button.rise(&flip_irq);  // attach the address of the flip function to the rising edge
+    button.fall(&flip_irq);  // attach the address of the flip function to the rising edge
     while(1) {           // wait around, interrupts will interrupt this!
         ThisThread::sleep_for(250ms);
     }
