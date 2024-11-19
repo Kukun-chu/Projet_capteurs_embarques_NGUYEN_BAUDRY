@@ -7,16 +7,22 @@ DigitalOut led(LED1);
 DigitalOut led(PinName(LED1));
 #endif
 
+Mutex print_mutex; // gestion conflit
 
 void ping() {
     for (int i = 0; i < 100; i++) {
+        print_mutex.lock();
         printf("Ping\n");
+        print_mutex.unlock();
     }
 }
 
 void pong() {
     for (int i = 0; i < 100; i++) {
+        print_mutex.lock();
         printf("Pong\n");
+        print_mutex.unlock();
+
     }
 }
 
