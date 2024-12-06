@@ -67,12 +67,12 @@ int main()
     //freq();
     //scanning_device();
 
-    while (1) {
+    /*while (1) {
         //temperature_sensor_handler();
         //humidity_sensor_handler();
-        pressure_sensor_handler();
-        ThisThread::sleep_for(1000ms); // Attendre une seconde avant la prochaine lecture
-    }
+        //pressure_sensor_handler();
+        //ThisThread::sleep_for(1000ms); // Attendre une seconde avant la prochaine lecture
+    }*/
 }
 
 
@@ -167,8 +167,8 @@ void humidity_sensor_handler() {
     // Conversion en pourcentage avec 2 décimales (sans float)
     int humidity = -600 + (12500 * hum_raw) / 65536;
     
-    // Affichage de la température sur le terminal avec printf
-    printf("Humidite : %d.%02d \n", humidity / 100, humidity % 100);
+    // Affichage de la Humidite sur le terminal avec printf
+    printf("Humidite : %d.%02d%HR\n", humidity / 100, humidity % 100);
 }
 
 
