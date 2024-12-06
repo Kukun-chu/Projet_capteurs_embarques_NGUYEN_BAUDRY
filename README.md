@@ -328,6 +328,7 @@ Pour l'exercice Ping pong, la procédure est différente. Il faut changer de bra
 
 ## **Projet LoRa**:
 Pour tester ce projet, il suffit d'utiliser la dernière version de la branche main. Il devrait apparaître sur le ThingsBoard un graphique montrant l'humidité 
+![Screenshot from 2024-12-06 16-23-25](https://github.com/user-attachments/assets/c9fded7b-7601-42fa-b595-dea33aec9032)
 
 ## **Liens ressources**:
 
