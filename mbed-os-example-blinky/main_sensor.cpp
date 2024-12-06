@@ -1,153 +1,319 @@
-#include <stdio.h>
+/* mbed Microcontroller Library
+ * Copyright (c) 2019 ARM Limited
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "mbed.h"
-#include "lorawan/LoRaWANInterface.h"
-#include "lorawan/system/lorawan_data_structures.h"
-#include "events/EventQueue.h"
-#include "lora_radio_helper.h"
+#include "PinNames.h"
+#include "gpio_irq_api.h"
+#include "utils.h"
+// Adresse I2C du capteur de température sur la carte 6TRON (à vérifier dans la documentation de la carte)
+#define TEMP_SENSOR_ADDR (0x48 << 1) // mbed utilise des adresses 8 bits
+#define HUM_SENSOR_ADDR (0x40 <<1) // mbed utilise des adresses 8 bits
+#define PRESSURE_SENSOR_ADDR (0x70 << 1)  // Adresse du capteur de pression
+//#define PRESSURE_SENSOR_ADDR 0x77  // Adresse du capteur de pression
 
-using namespace events;
+#define TEMP_REGISTER 0x00            // Registre de température (à confirmer dans la documentation du capteur)
+#define HUM_REGISTER 0xE5            // Registre de l'humidite
+#define PRESSURE_REGISTER 0xF7            // Registre de pression
 
-// Configuration LoRaWAN
-#define TX_TIMER                        10000  // 10 secondes
-#define CONFIRMED_MSG_RETRY_COUNTER     3
-#define LORA_APP_PORT                   2      // Choisir un port LoRaWAN pour ThingsBoard
 
-// Capteur d'humidité
-#define HUM_SENSOR_ADDR 0x40           // Adresse I2C du capteur d'humidité
-#define HUM_REGISTER      0x00         // Registre pour lire l'humidité
+// Blinking rate in milliseconds
+#define BLINKING_RATE 500ms
 
-uint8_t tx_buffer[30];
-uint8_t rx_buffer[30];
 
-// Variables globales
-char *payload = "{\"humidity\": %d}";  // Format de message pour envoyer l'humidité
+// Initialisation de l'I2C et de la sortie série
+I2C i2c(P1_I2C_SDA, P1_I2C_SCL);
 
-// Variables LoRaWAN
-static EventQueue ev_queue(MAX_NUMBER_OF_EVENTS * EVENTS_EVENT_SIZE);
-static LoRaWANInterface lorawan(radio);
 
-// Définition des événements LoRaWAN
-static void lora_event_handler(lorawan_event_t event);
+// Initialise the digital pin LED1 as an output
+#ifdef LED1
+    DigitalOut led(LED1);
+#else
+    bool led;
+#endif
 
-// Fonction pour lire et envoyer l'humidité via LoRaWAN
-void humidity_sensor_handler() {
-    char read_hum_data[2] = {0};
-    char reg_adress[1] = {HUM_REGISTER};
+// Init Timer
+Timer t;
 
-    // Lire les données du capteur d'humidité
-    if (i2c.write(HUM_SENSOR_ADDR, reg_adress, 1) != 0) {
-        printf("Erreur lors de l'envoi de la commande au capteur d'humidité.\n");
+// Handler timer
+int handlerTimer = 0;
+
+// Init Ticker
+Ticker ticker;
+
+/*
+int main()
+{
+    //blinking_test();
+    //button_test();
+    //button_irq();
+    //timer();
+    //ticker_func();
+    //freq();
+    //scanning_device();
+
+    while (1) {
+        //temperature_sensor_handler();
+        //humidity_sensor_handler();
+        pressure_sensor_handler();
+        ThisThread::sleep_for(1000ms); // Attendre une seconde avant la prochaine lecture
+    }
+}*/
+
+
+// Fonction pour lire et afficher la pression
+void pressure_sensor_handler() {
+    char reg_address_1[1] = {0xF7};  // REG PRESS_TXD0
+
+    char read_data[3] = {0};       // Tableau pour lire les 3 octets de pression
+
+    
+    if (i2c.write(PRESSURE_SENSOR_ADDR, reg_address_1, 1) != 0) {
+        printf("Erreur lors de l'envoi de la commande au capteur de pression (REG PRESS_TXD0).\n");
         return;
     }
 
-    // Attendre la conversion du capteur
+    ThisThread::sleep_for(100ms);
+
+    // Lire les 3 octets de pression
+    if (i2c.read(PRESSURE_SENSOR_ADDR, read_data, 3) != 0) {
+        printf("Erreur lors de la lecture de la pression.\n");
+        return;
+    }
+    
+    // Convertir les trois octets de pression en une valeur signée sur 32 bits
+    //int32_t dp = (data[0] << 16 | data[1] << 8 | data[2]) - ((uint32_t)1 << 23);
+
+    // Calcul de la pression en utilisant les coefficients
+    /*
+    double pressure = _coef.b00 + 
+                      _coef.bt1 * tr + 
+                      _coef.bp1 * (float)dp + 
+                      _coef.b11 * dp * tr + 
+                      _coef.bt2 * tr * tr + 
+                      _coef.bp2 * dp * dp + 
+                      _coef.b12 * dp * tr * tr + 
+                      _coef.b21 * dp * dp * tr + 
+                      _coef.bp3 * dp * dp * dp;
+    */
+    // Affichage des données brutes lues
+    printf("Donnees brutes lues: 0x%02X 0x%02X 0x%02X\n", read_data[0], read_data[1], read_data[2]);
+
+    // Combiner les 3 octets pour obtenir la valeur complète de pression (en 24 bits)
+    int pressure_raw = (read_data[0] << 16) | (read_data[1] << 8) | read_data[2];
+    printf("Pression raw: %d hPa\n", pressure_raw);
+
+    // Ajuster le calcul de la pression
+    int pressure = pressure_raw / 16; 
+
+    // Affichage de la pression sur le terminal
+    printf("Pression : %d hPa\n", pressure);
+}
+
+
+
+void scanning_device() {
+    printf("Scanning I2C devices...\n");
+    for (int addr = 0; addr < 128; addr++) {
+        if (i2c.write(addr << 1, NULL, 0) == 0) {
+            printf("Found device at address 0x%02X\n", addr);
+        }
+    }
+    printf("Scan complete.\n");
+}
+
+
+// Fonction pour lire et afficher l'humidite
+int humidity_sensor_handler() {
+    //char cmd[1];
+    char read_hum_data[2] =  {0};
+    char reg_adress[1] = {0x00};
+    reg_adress[0] = HUM_REGISTER;
+
+    //i2c.write(HUM_SENSOR_ADDR, &reg_adress, 1);
+    if (i2c.write(HUM_SENSOR_ADDR, reg_adress, 1) != 0) {
+        printf("Erreur lors de l'envoi de la commande au capteur.\n");
+        //return;
+    }
+
+    // Ajouter un délai pour permettre la conversion (selon la datasheet)
     ThisThread::sleep_for(10ms);
 
-    // Lire les données d'humidité
+    // Lire les données de température (2 octets)
+    // i2c.read(HUM_SENSOR_ADDR, read_data, 2);
     if (i2c.read(HUM_SENSOR_ADDR, read_hum_data, 2) != 0) {
-        printf("Erreur lors de la lecture de l'humidité.\n");
-        return;
+        printf("Erreur lors de la lecture de l'humidite.\n");
+        //return;
     }
 
-    // Conversion des données brutes en pourcentage d'humidité
-    int hum_raw = (read_hum_data[0] << 8) | (read_hum_data[1] & 0xFFFC);
+    int hum_raw = (read_hum_data[0] << 8) | read_hum_data[1] & 0xFFFC; // Ignore les bits de status
+
+
+    // Conversion en pourcentage avec 2 décimales (sans float)
     int humidity = -600 + (12500 * hum_raw) / 65536;
+    
+    // Affichage de la température sur le terminal avec printf
+    printf("Humidite : %d.%02d \n", humidity / 100, humidity % 100);
 
-    // Formater les données d'humidité pour l'envoi
-    char msg[64];
-    snprintf(msg, sizeof(msg), payload, humidity);
+    return humidity;
+}
 
-    // Préparer les données pour l'envoi LoRaWAN
-    memcpy(tx_buffer, msg, strlen(msg));
-    int packet_len = strlen(msg);
 
-    // Envoyer le message via LoRaWAN
-    int retcode = lorawan.send(LORA_APP_PORT, tx_buffer, packet_len, MSG_UNCONFIRMED_FLAG);
-    if (retcode < 0) {
-        printf("Erreur d'envoi, code %d\n", retcode);
-    } else {
-        printf("Envoi réussi, %d octets envoyés\n", retcode);
+// Fonction pour lire et afficher la température
+void temperature_sensor_handler() {
+    //char cmd[1];
+    char read_data[2] =  {0};
+    char reg_adress[1] = {0x00};
+    
+    //cmd[0] = TEMP_REGISTER; // Envoie la commande pour lire le registre de température
+
+    //i2c.write(TEMP_SENSOR_ADDR, &reg_adress, 1);
+    if (i2c.write(TEMP_SENSOR_ADDR, reg_adress, 1) != 0) {
+        printf("Erreur lors de l'envoi de la commande au capteur.\n");
+        //return;
+    }
+
+    // Lire les données de température (2 octets)
+    // i2c.read(TEMP_SENSOR_ADDR, read_data, 2);
+    if (i2c.read(TEMP_SENSOR_ADDR, read_data, 2) != 0) {
+        printf("Erreur lors de la lecture de la temperature.\n");
+        //return;
+    }
+
+    int temp_raw = (read_data[0] << 8) | read_data[1];
+
+    // Simuler deux décimales en multipliant par 100 et en affichant sous forme d'entier
+    int temperature = temp_raw * 100 / 128; // Multiplier par 100 pour simuler 2 décimales
+
+    // Affichage de la température sur le terminal avec printf
+    printf("Temperature : %d.%02d deg Celsius\n", temperature / 100, temperature % 100);
+}
+
+
+void blinking_test() {
+    // Initialise the digital pin LED1 as an output
+    #ifdef LED1
+        DigitalOut led(LED1);
+    #else
+        bool led;
+    #endif
+
+    while (true) {
+        led = 1;          // set LED1 pin to high
+        printf("myled = %d \n\r", (uint8_t)led);
+        ThisThread::sleep_for(500ms);
+
+        led.write(0);     // set LED1 pin to low
+        printf("led = %d \n\r", led.read());
+        ThisThread::sleep_for(500ms);
+        
+        //led = !led;
+        //ThisThread::sleep_for(BLINKING_RATE);
     }
 }
 
-// Gestion des événements LoRaWAN
-static void lora_event_handler(lorawan_event_t event) {
-    switch (event) {
-        case CONNECTED:
-            printf("\r\nConnexion LoRaWAN réussie!\n");
-            ev_queue.call_every(TX_TIMER, humidity_sensor_handler);  // Envoi toutes les 10 secondes
-            break;
-        case DISCONNECTED:
-            ev_queue.break_dispatch();
-            printf("\r\nDéconnexion réussie!\n");
-            break;
-        case TX_DONE:
-            printf("\r\nMessage envoyé avec succès!\n");
-            break;
-        case TX_TIMEOUT:
-        case TX_ERROR:
-        case TX_CRYPTO_ERROR:
-        case TX_SCHEDULING_ERROR:
-            printf("\r\nErreur lors de l'envoi, code = %d\n", event);
-            break;
-        case RX_DONE:
-            printf("\r\nMessage reçu!\n");
-            break;
-        case RX_TIMEOUT:
-        case RX_ERROR:
-            printf("\r\nErreur de réception, code = %d\n", event);
-            break;
-        case JOIN_FAILURE:
-            printf("\r\nÉchec de la connexion OTAA - Vérifiez les clés!\n");
-            break;
-        case UPLINK_REQUIRED:
-            printf("\r\nLe serveur de réseau demande un message uplink\n");
-            humidity_sensor_handler();  // Essayer d'envoyer un message
-            break;
-        default:
-            MBED_ASSERT("Événement inconnu");
+void button_test() {
+    // Initialise the digital pin LED1 as an output
+    #ifdef LED1
+        DigitalOut led(LED1);
+    #else
+        bool led;
+    #endif
+
+    // Initialise the digital pin BUTTON1
+    #ifdef BUTTON1
+        DigitalIn button(BUTTON1);
+    #else
+        bool button;
+    #endif
+
+    while (true) {
+        if (button.read() == 1) {
+            led = 1;          // set LED1 pin to high
+        }
+        else{
+            led.write(0);     // set LED1 pin to low
+        }
+        printf("button_state = %d \n\r", button.read());
     }
 }
 
-int main(void) {
-    lorawan_status_t retcode;
+void button_irq() {
 
-    // Initialisation du stack LoRaWAN
-    if (lorawan.initialize(&ev_queue) != LORAWAN_STATUS_OK) {
-        printf("\r\nInitialisation LoRaWAN échouée!\n");
-        return -1;
+    // Initialise the digital pin BUTTON1
+    #ifdef BUTTON1
+        InterruptIn button(BUTTON1);
+    #else
+        bool button;
+    #endif
+
+    button.rise(&flip_irq);  // attach the address of the flip function to the rising edge
+    button.fall(&flip_irq);  // attach the address of the flip function to the rising edge
+    while(1) {           // wait around, interrupts will interrupt this!
+        ThisThread::sleep_for(250ms);
     }
+}
 
-    printf("\r\nStack LoRaWAN initialisé\n");
+void flip_irq() {
+    led = !led;
+}
 
-    // Définir les callbacks d'événements LoRaWAN
-    lorawan_app_callbacks_t callbacks;
-    callbacks.events = mbed::callback(lora_event_handler);
-    lorawan.add_app_callbacks(&callbacks);
+void timer() {
+    // Initialise the digital pin BUTTON1
+    #ifdef BUTTON1
+        InterruptIn button(BUTTON1);
+    #else
+        bool button;
+    #endif
 
-    // Configurer les paramètres de réessai pour les messages confirmés
-    if (lorawan.set_confirmed_msg_retries(CONFIRMED_MSG_RETRY_COUNTER) != LORAWAN_STATUS_OK) {
-        printf("\r\nÉchec de la configuration des réessais!\n");
-        return -1;
+    button.rise(&start_counting);  // attach the address of the flip function to the rising edge
+    button.fall(&end_counting);  // attach the address of the flip function to the rising edge
+    while(1) {           // wait around, interrupts will interrupt this!
+        ThisThread::sleep_for(250ms);
+        if(handlerTimer == 1) {
+            printf("End time: %llu milliseconds\n", std::chrono::duration_cast<std::chrono::milliseconds>(t.elapsed_time()).count());
+            handlerTimer = 0;
+        }
     }
+}
 
-    // Activer l'Adaptive Data Rate (ADR)
-    if (lorawan.enable_adaptive_datarate() != LORAWAN_STATUS_OK) {
-        printf("\r\nÉchec de l'activation de l'ADR!\n");
-        return -1;
+void start_counting() {
+    t.start();
+    led = !led;
+}
+
+void end_counting() {
+    t.stop();
+    led = !led;
+    handlerTimer = 1;
+}
+
+void ticker_func() {
+    ticker.attach(&flip_irq, 1s);
+}
+
+void freq() {
+    // Initialise the digital pin BUTTON1
+    #ifdef BUTTON1
+        InterruptIn button(BUTTON1);
+    #else
+        bool button;
+    #endif
+
+    std::chrono::milliseconds freq_rate = 100ms;
+    ticker.attach(&flip_irq, freq_rate);
+    button.fall(&increment_freq_rate);  // attach the address of the flip function to the rising edge
+    while(1) {           // wait around, interrupts will interrupt this!
+        ThisThread::sleep_for(250ms);
+        if(handlerTimer == 1) {
+            freq_rate *= 10;
+            handlerTimer = 0;
+            ticker.attach(&flip_irq, freq_rate);
+        }
     }
+}
 
-    // Connexion au réseau LoRaWAN
-    retcode = lorawan.connect();
-    if (retcode != LORAWAN_STATUS_OK && retcode != LORAWAN_STATUS_CONNECT_IN_PROGRESS) {
-        printf("\r\nÉchec de la connexion, code = %d\n", retcode);
-        return -1;
-    }
-
-    printf("\r\nConnexion en cours...\n");
-
-    // Lancer l'événement queue pour dispatcher en continu
-    ev_queue.dispatch_forever();
-
-    return 0;
+void increment_freq_rate() {
+    handlerTimer = 1;
 }

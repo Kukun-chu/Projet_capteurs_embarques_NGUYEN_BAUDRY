@@ -1,0 +1,14 @@
+void blinking_test();
+void button_test();
+void button_irq();
+void flip_irq();
+void timer();
+void start_counting();
+void end_counting();
+void ticker_func();
+void freq();
+void increment_freq_rate();
+void temperature_sensor_handler();
+int humidity_sensor_handler();
+void scanning_device();
+void pressure_sensor_handler();

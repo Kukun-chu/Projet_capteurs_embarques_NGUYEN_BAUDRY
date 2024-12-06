@@ -1,0 +1,50 @@
+{
+  "config": {
+    "lora-antenna-power-ctrl": {
+      "help": "Pin controlling antenna power switch"
+    },
+    "main_stack_size": {
+      "value": 4096
+    }
+  },
+  "requires": [
+    "bare-metal",
+    "lora",
+    "sx1272-lora-driver",
+    "spif-driver"
+  ],
+  "target_overrides": {
+    "*": {
+      "platform.minimal-printf-enable-floating-point": true,
+      "platform.stdio-baud-rate": 115200,
+      "platform.default-serial-baud-rate": 115200,
+      "lora.public-network": true,
+      "lora.over-the-air-activation": true,
+      "lora.duty-cycle-on": true,
+      "lora.app-port": 15,
+      "lora.phy": "EU868",
+      "lora.device-eui": "{ 0x55, 0x35, 0x99, 0xf0, 0x5b, 0xae, 0x34, 0x06 }",
+      "lora.application-eui": "{ 0x10, 0xCE, 0x45, 0xFF, 0xFE, 0x00, 0x8C, 0x7E }",
+      "lora.application-key": "{ 0x89, 0x81, 0xB4, 0xAD, 0x63, 0x7E, 0xA4, 0x62, 0xEE, 0x17, 0x3E, 0x56, 0x97, 0xFD, 0xB7, 0x82 }"
+    },
+    "ZEST_CORE_FMLR-72": {
+      "target.components_add": [
+        "SX1272"
+      ],
+      "sx1272-lora-driver.spi-mosi": "LORA_MOSI",
+      "sx1272-lora-driver.spi-miso": "LORA_MISO",
+      "sx1272-lora-driver.spi-sclk": "LORA_SCK",
+      "sx1272-lora-driver.spi-cs": "LORA_CS",
+      "sx1272-lora-driver.reset": "LORA_RESET",
+      "sx1272-lora-driver.dio0": "LORA_DIO0",
+      "sx1272-lora-driver.dio1": "LORA_DIO1",
+      "sx1272-lora-driver.dio2": "LORA_DIO2",
+      "sx1272-lora-driver.dio3": "LORA_DIO3",
+      "sx1272-lora-driver.dio4": "LORA_DIO4",
+      "lora-antenna-power-ctrl": "LORA_ANTSW_PWR"
+    }
+  },
+  "macros": [
+    "MBEDTLS_USER_CONFIG_FILE=\"mbedtls_lora_config.h\""
+  ]
+}
